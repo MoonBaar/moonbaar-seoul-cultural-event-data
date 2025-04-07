@@ -11,7 +11,8 @@ def create_tables_if_not_exist(cursor):
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS categories (
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(50) UNIQUE
+      name VARCHAR(50) UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
 
@@ -19,7 +20,8 @@ def create_tables_if_not_exist(cursor):
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS districts (
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(50) UNIQUE
+      name VARCHAR(50) UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
 
@@ -35,8 +37,8 @@ def create_tables_if_not_exist(cursor):
       player TEXT,
       program TEXT,
       etc_desc TEXT,
-      org_link VARCHAR(255),
-      main_img VARCHAR(255),
+      org_link TEXT,
+      main_img VARCHAR(500),
       rgstdate DATE,
       ticket VARCHAR(50),
       start_date TIMESTAMP,
@@ -45,10 +47,12 @@ def create_tables_if_not_exist(cursor):
       latitude DECIMAL(10,7),
       longitude DECIMAL(10,7),
       is_free VARCHAR(10),
-      hmpg_addr VARCHAR(255),
+      hmpg_addr TEXT,
       category_id BIGINT,
       district_id BIGINT,
       api_last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (category_id) REFERENCES categories(id),
       FOREIGN KEY (district_id) REFERENCES districts(id),
       UNIQUE KEY (title, start_date)
@@ -63,7 +67,8 @@ def create_tables_if_not_exist(cursor):
       oauth_provider VARCHAR(50),
       nickname VARCHAR(100),
       profile_image_url VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
     """)
 
@@ -74,6 +79,7 @@ def create_tables_if_not_exist(cursor):
       user_id BIGINT,
       event_id BIGINT,
       visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (event_id) REFERENCES cultural_events(id),
       UNIQUE KEY (user_id, event_id)
@@ -87,6 +93,7 @@ def create_tables_if_not_exist(cursor):
       user_id BIGINT,
       event_id BIGINT,
       liked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (event_id) REFERENCES cultural_events(id),
       UNIQUE KEY (user_id, event_id)
@@ -102,7 +109,8 @@ def create_tables_if_not_exist(cursor):
       name VARCHAR(100),
       description TEXT,
       image_url VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
     """)
 
@@ -113,6 +121,7 @@ def create_tables_if_not_exist(cursor):
       user_id BIGINT,
       badge_id BIGINT,
       acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (badge_id) REFERENCES badges(id),
       UNIQUE KEY (user_id, badge_id)
@@ -216,7 +225,8 @@ def insert_or_update_event(cursor, event, category_id, district_id):
             hmpg_addr = %s,
             category_id = %s,
             district_id = %s,
-            api_last_updated = NOW()
+            api_last_updated = NOW(),
+            updated_at = NOW()
         WHERE id = %s
         """
 
@@ -254,13 +264,14 @@ def insert_or_update_event(cursor, event, category_id, district_id):
             player, program, etc_desc, org_link, main_img,
             rgstdate, ticket, start_date, end_date, themecode,
             latitude, longitude, is_free, hmpg_addr, 
-            category_id, district_id, api_last_updated
+            category_id, district_id, api_last_updated,
+            created_at, updated_at
         ) VALUES (
             %s, %s, %s, %s, %s, 
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, 
-            %s, %s, NOW()
+            %s, %s, NOW(), NOW(), NOW()
         )
         """
 
@@ -332,7 +343,7 @@ def main():
 
     # 데이터 가져올 인덱스 범위
     START_INDEX = 1
-    END_INDEX = 30  # 원하는 최종 인덱스로 변경, 예: 5000
+    END_INDEX = 1000  # 원하는 최종 인덱스로 변경, 예: 5000
 
     # 배치 사이즈 설정 (API 최대 허용: 1000)
     BATCH_SIZE = 1000
