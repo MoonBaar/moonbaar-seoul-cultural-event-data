@@ -2,137 +2,9 @@ import requests
 import pymysql
 from datetime import datetime
 import math
-
-# 테이블 생성 함수
-
-
-def create_tables_if_not_exist(cursor):
-    # 카테고리 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS categories (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(50) UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    # 행정구 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS districts (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(50) UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    # 문화행사 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS cultural_events (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      title VARCHAR(255),
-      place VARCHAR(255),
-      org_name VARCHAR(255),
-      use_trgt VARCHAR(255),
-      use_fee VARCHAR(255),
-      player TEXT,
-      program TEXT,
-      etc_desc TEXT,
-      org_link TEXT,
-      main_img VARCHAR(500),
-      rgstdate DATE,
-      ticket VARCHAR(50),
-      start_date TIMESTAMP,
-      end_date TIMESTAMP,
-      themecode VARCHAR(100),
-      latitude DECIMAL(10,7),
-      longitude DECIMAL(10,7),
-      is_free VARCHAR(10),
-      hmpg_addr TEXT,
-      category_id BIGINT,
-      district_id BIGINT,
-      api_last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (category_id) REFERENCES categories(id),
-      FOREIGN KEY (district_id) REFERENCES districts(id),
-      UNIQUE KEY (title, start_date)
-    )
-    """)
-
-    # 사용자 테이블 (참조를 위해 필요)
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      oauth_id VARCHAR(255) UNIQUE,
-      oauth_provider VARCHAR(50),
-      nickname VARCHAR(100),
-      profile_image_url VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
-    """)
-
-    # 방문 기록 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS visits (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      user_id BIGINT,
-      event_id BIGINT,
-      visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (event_id) REFERENCES cultural_events(id),
-      UNIQUE KEY (user_id, event_id)
-    )
-    """)
-
-    # 좋아요 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS liked_events (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      user_id BIGINT,
-      event_id BIGINT,
-      liked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (event_id) REFERENCES cultural_events(id),
-      UNIQUE KEY (user_id, event_id)
-    )
-    """)
-
-    # 배지 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS badges (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      badge_type VARCHAR(50),
-      code VARCHAR(50) UNIQUE,
-      name VARCHAR(100),
-      description TEXT,
-      image_url VARCHAR(255),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
-    """)
-
-    # 사용자 배지 테이블
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS user_badges (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      user_id BIGINT,
-      badge_id BIGINT,
-      acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (badge_id) REFERENCES badges(id),
-      UNIQUE KEY (user_id, badge_id)
-    )
-    """)
-
-    print("필요한 테이블이 모두 생성되었습니다.")
+import os
 
 # API 요청 함수
-
-
 def fetch_cultural_events(api_key, start_index, end_index):
     url = "http://openapi.seoul.go.kr:8088"
     endpoint = f"{url}/{api_key}/json/culturalEventInfo/{start_index}/{end_index}"
@@ -148,8 +20,6 @@ def fetch_cultural_events(api_key, start_index, end_index):
         return []
 
 # 카테고리 ID 가져오기 (없으면 생성)
-
-
 def get_or_create_category(cursor, category_name):
     if not category_name or category_name.strip() == '':
         category_name = '기타'
@@ -162,13 +32,12 @@ def get_or_create_category(cursor, category_name):
         return result[0]
 
     # 새 카테고리 생성
-    insert_query = "INSERT INTO categories (name) VALUES (%s)"
-    cursor.execute(insert_query, (category_name,))
+    current_time = datetime.now()
+    insert_query = "INSERT INTO categories (name, created_at) VALUES (%s, %s)"
+    cursor.execute(insert_query, (category_name, current_time))
     return cursor.lastrowid
 
 # 행정구 ID 가져오기 (없으면 생성)
-
-
 def get_or_create_district(cursor, district_name):
     if not district_name or district_name.strip() == '':
         district_name = '기타'
@@ -181,13 +50,12 @@ def get_or_create_district(cursor, district_name):
         return result[0]
 
     # 새 행정구 생성
-    insert_query = "INSERT INTO districts (name) VALUES (%s)"
-    cursor.execute(insert_query, (district_name,))
+    current_time = datetime.now()
+    insert_query = "INSERT INTO districts (name, created_at) VALUES (%s, %s)"
+    cursor.execute(insert_query, (district_name, current_time))
     return cursor.lastrowid
 
 # 문화행사 삽입 또는 업데이트
-
-
 def insert_or_update_event(cursor, event, category_id, district_id):
     # 동일 행사가 있는지 확인 (title과 start_date로 판단)
     check_query = """
@@ -201,6 +69,8 @@ def insert_or_update_event(cursor, event, category_id, district_id):
 
     cursor.execute(check_query, (event.get('TITLE', ''), start_date))
     existing = cursor.fetchone()
+
+    current_time = datetime.now()
 
     if existing:
         # 이미 존재하는 행사 업데이트
@@ -225,8 +95,8 @@ def insert_or_update_event(cursor, event, category_id, district_id):
             hmpg_addr = %s,
             category_id = %s,
             district_id = %s,
-            api_last_updated = NOW(),
-            updated_at = NOW()
+            api_last_updated = %s,
+            updated_at = %s
         WHERE id = %s
         """
 
@@ -250,6 +120,8 @@ def insert_or_update_event(cursor, event, category_id, district_id):
             event.get('HMPG_ADDR', ''),
             category_id,
             district_id,
+            current_time,  # api_last_updated
+            current_time,  # updated_at
             existing[0]
         )
 
@@ -271,7 +143,7 @@ def insert_or_update_event(cursor, event, category_id, district_id):
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, 
-            %s, %s, NOW(), NOW(), NOW()
+            %s, %s, %s, %s, %s
         )
         """
 
@@ -296,15 +168,16 @@ def insert_or_update_event(cursor, event, category_id, district_id):
             event.get('IS_FREE', ''),
             event.get('HMPG_ADDR', ''),
             category_id,
-            district_id
+            district_id,
+            current_time,  # api_last_updated
+            current_time,  # created_at
+            current_time   # updated_at
         )
 
         cursor.execute(insert_query, params)
         return cursor.lastrowid, "inserted"
 
 # 날짜 문자열 파싱 함수
-
-
 def parse_date(date_str):
     if not date_str or date_str.strip() == '':
         return None
@@ -328,18 +201,19 @@ def parse_date(date_str):
         return None
 
 # 메인 함수
-
-
 def main():
     # 설정
-    API_KEY = "API_KEY"  # 서울시 공공데이터 포털에서 발급받은 API 키로 변경
+    API_KEY = os.getenv('SEOUL_API_KEY')  # 서울시 공공데이터 포털에서 발급받은 API 키로 변경
     DB_CONFIG = {
-        'host': 'localhost',
-        'user': 'USER',  # 설정한 user로 변경
-        'password': 'PASSWORD',  # 설정한 비밀번호로 변경
-        'db': 'DB',  # 설정한 db로 변경
+        'host': os.getenv('DB_HOST'),
+        'user': os.getenv('DB_USER'),  # 설정한 user로 변경
+        'password': os.getenv('DB_PASSWORD'),  # 설정한 비밀번호로 변경
+        'db': os.getenv('DB_NAME'),  # 설정한 db로 변경
         'charset': 'utf8mb4'
     }
+
+    # 환경 변수 디버깅
+    print(f"환경 변수 확인: DB_HOST={os.getenv('DB_HOST')}, DB_USER={os.getenv('DB_USER')}, DB_NAME={os.getenv('DB_NAME')}, API_KEY={API_KEY != None}")
 
     # 데이터 가져올 인덱스 범위
     START_INDEX = 1
@@ -361,8 +235,8 @@ def main():
 
     try:
         with connection.cursor() as cursor:
-            # 필요한 테이블 생성
-            create_tables_if_not_exist(cursor)
+            # 테이블 생성 로직을 생략 (이미 Spring에 의해 생성됨)
+            print("테이블이 이미 존재하므로 테이블 생성 과정을 건너뜁니다.")
 
             # 결과 통계
             total_inserted = 0
@@ -372,11 +246,9 @@ def main():
             # 배치 처리
             for batch in range(num_batches):
                 batch_start = START_INDEX + (batch * BATCH_SIZE)
-                batch_end = min(START_INDEX + ((batch + 1)
-                                * BATCH_SIZE) - 1, END_INDEX)
+                batch_end = min(START_INDEX + ((batch + 1) * BATCH_SIZE) - 1, END_INDEX)
 
-                print(
-                    f"배치 {batch + 1}/{num_batches} 처리 중 (인덱스: {batch_start}-{batch_end})...")
+                print(f"배치 {batch + 1}/{num_batches} 처리 중 (인덱스: {batch_start}-{batch_end})...")
 
                 # API 요청 및 데이터 가져오기
                 events = fetch_cultural_events(API_KEY, batch_start, batch_end)
@@ -392,18 +264,14 @@ def main():
                     try:
                         # 카테고리 확인 및 생성
                         category_name = event.get('CODENAME', '기타')
-                        category_id = get_or_create_category(
-                            cursor, category_name)
+                        category_id = get_or_create_category(cursor, category_name)
 
                         # 행정구역 확인 및 생성
                         district_name = event.get('GUNAME', '기타')
-                        district_id = get_or_create_district(
-                            cursor, district_name)
+                        district_id = get_or_create_district(cursor, district_name)
 
                         # 행사 삽입 또는 업데이트
-                        event_id, status = insert_or_update_event(
-                            cursor, event, category_id, district_id
-                        )
+                        event_id, status = insert_or_update_event(cursor, event, category_id, district_id)
 
                         batch_results.append({
                             'id': event_id,
@@ -418,10 +286,8 @@ def main():
                 connection.commit()
 
                 # 배치 결과 통계
-                batch_inserted = sum(
-                    1 for r in batch_results if r['status'] == 'inserted')
-                batch_updated = sum(
-                    1 for r in batch_results if r['status'] == 'updated')
+                batch_inserted = sum(1 for r in batch_results if r['status'] == 'inserted')
+                batch_updated = sum(1 for r in batch_results if r['status'] == 'updated')
 
                 print(f"배치 {batch + 1} 결과: 총 {len(batch_results)}개 행사 처리")
                 print(f"- 삽입: {batch_inserted}개")
@@ -443,7 +309,6 @@ def main():
         connection.rollback()
     finally:
         connection.close()
-
 
 if __name__ == "__main__":
     main()
